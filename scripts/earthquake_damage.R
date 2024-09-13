@@ -12,6 +12,9 @@ setwd("C:/GitHub/earthquake_damage/")
 
 require(tidyverse)
 require(corrplot)
+require(rpart)
+require(rpart.plot)
+
 
 get_percentiles <- function(column){
   print(quantile(column, 
@@ -319,25 +322,100 @@ d <- d %>%
                    vars_to_remove_discrete,
                    vars_to_remove_binary)))
 
+glimpse(d)
 
 
+# ----------------------------------------------------------------------------
+# prep for modeling
+# ----------------------------------------------------------------------------
+
+x <- d #delete later
+
+# convert chr and num discrete to factor
+vars_to_convert_to_factor <- c("damage_grade",
+                               "land_surface_condition",
+                               "roof_type",
+                               "other_floor_type",
+                               "position",
+                               "foundation_type_imp",
+                               "ground_floor_type_imp",
+                               "plan_configuration_imp",
+                               "legal_ownership_status_imp",
+                               "count_floors_pre_eq_imp",
+                               "count_families_imp"
+                               )
+
+d <- d %>% 
+  mutate_at(vars_to_convert_to_factor, as.factor)
+
+# vars_to_convert_to_binary that start with has
+d <- d %>%
+  mutate_at(vars(starts_with("has_")), as.logical)
+
+# confirm only binary, factor and true num are present
+glimpse(d)
+
+# split train/test 
+mytrain <- d %>%
+  filter(dataset == "train") %>%
+  select(-dataset)
+
+mytest <- d %>%
+  filter(dataset == "test") %>%
+  select(-c(dataset, damage_grade))
+
+rm(d)
+
+
+# ----------------------------------------------------------------------------
+# feature selection with tree
+# ----------------------------------------------------------------------------
+
+set.seed(97702)
+mdl1_rpart <- rpart(damage_grade ~ . - building_id, 
+                    data = mytrain, 
+                    method = "class",
+                    control = rpart.control(cp = 0))
+
+# voy, figure out how to rpint
+
+#fix don't run
+rpart.plot(mdl1_rpart,
+           type = 1,
+           box.palette = "0",
+           clip.right.labs = FALSE)
+
+#mdl1_rpart
+
+mdl1_rpart_predictions <- predict(mdl1_rpart, mytest, type = "class")
+head(mdl1_rpart_predictions, 10)
+
+mdl1_rpart_predictions <- data.frame(mdl1_rpart_predictions)
+mdl1_rpart_predictions$building_id <- mytest$building_id
+
+mdl1_rpart_predictions <- mdl1_rpart_predictions %>%
+  select(building_id, mdl1_rpart_predictions)
+
+mdl1_rpart_predictions <- mdl1_rpart_predictions %>%
+  select(building_id, mdl1_rpart_predictions) %>%
+  rename(damage_grade = mdl1_rpart_predictions
+         )
+
+write.csv(mdl1_rpart_predictions,
+          file = "./output/mdl1_rpart_predictions.csv",
+          row.names = FALSE)
+
+#voy
 
 # remove corr predictors using caret, y ver primero
 
-# coece variables to right type                 
-
-# remove all vars from above not useful
-#d <- d %>% 
-#select(-any_of(binary_vars_to_remove))
 
 # caret and tidymodels 
-# tree
 # glm
 # rf/gbm
 # nn
 # kn
 
 #to dos
-# arriba quitar los df_binary y eso conforme no necesito. same with read / loaded data
 
 
